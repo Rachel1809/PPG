@@ -214,23 +214,28 @@ def search_nearest_point(point_batch, point_gt):
     return dis_idx
 
 def write_ply(points, color, filename, mode="w"):
-    with open(filename, mode) as f:
-        # Write the header
-        f.write("ply\n")
-        f.write("format ascii 1.0\n")
-        f.write("element vertex {}\n".format(len(points)))
-        f.write("property float x\n")
-        f.write("property float y\n")
-        f.write("property float z\n")
-        f.write("property uchar red\n")
-        f.write("property uchar green\n")
-        f.write("property uchar blue\n")
-        f.write("end_header\n")
+    if mode == "w":
+        with open(filename, mode) as f:
+            # Write the header
+            f.write("ply\n")
+            f.write("format ascii 1.0\n")
+            f.write("element vertex {}\n".format(len(points)))
+            f.write("property float x\n")
+            f.write("property float y\n")
+            f.write("property float z\n")
+            f.write("property uchar red\n")
+            f.write("property uchar green\n")
+            f.write("property uchar blue\n")
+            f.write("end_header\n")
 
-        # Write the points with the same color
-        for point in points:
-            f.write("{} {} {} {} {} {}\n".format(point[0], point[1], point[2], color[0], color[1], color[2]))
-
+            # Write the points with the same color
+            for point in points:
+                f.write("{} {} {} {} {} {}\n".format(point[0], point[1], point[2], color[0], color[1], color[2]))
+    elif mode == "a":
+        print(color)
+        with open(filename, mode) as f:
+            for point in points:
+                f.write("{} {} {} {} {} {}\n".format(point[0], point[1], point[2], color[0], color[1], color[2]))
 def calculate_normal_vectors(nearest_neighbors):
     # Extract coordinates of points and neighbors
     p1, p2, p3 = nearest_neighbors[:, 0][:, None], nearest_neighbors[:, 1][:, None], nearest_neighbors[:, 2][:, None]
