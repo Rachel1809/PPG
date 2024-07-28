@@ -247,6 +247,7 @@ def calculate_normal_vectors(nearest_neighbors):
     return normal_vectors.squeeze(1)
 
 def process_data(data_dir, dataname):
+    print(data_dir, dataname)
     if os.path.exists(os.path.join(data_dir, 'input', dataname) + '.ply'):
         pointcloud = trimesh.load(os.path.join(data_dir, 'input', dataname) + '.ply').vertices
         pointcloud = np.asarray(pointcloud)
