@@ -48,52 +48,6 @@ def can_form_circle(points, beta):
 
     return mask, radius, circumcenter
 
-# def can_form_circle(points, beta):
-#     A, B, C = points[:, :, 0], points[:, :, 1], points[:, :, 2]
-    
-#     v_AB = B - A
-#     v_AC = C - A
-    
-#     norm_A = torch.sum(A**2, dim=-1)
-#     norm_B = torch.sum(B**2, dim=-1)
-#     norm_C = torch.sum(C**2, dim=-1)
-    
-#     v_normal = torch.cross(v_AB, v_AC)
-    
-#     i1 = (norm_B - norm_A) / 2
-#     i2 = (norm_C - norm_A) / 2
-#     i3 = torch.sum(v_normal * A, dim=-1)
-    
-#     right = torch.stack((i1, i2, i3), dim=-1).unsqueeze(-1)
-#     left = torch.stack((v_AB, v_AC, v_normal), dim=-2)
-    
-#     circumcenter = torch.zeros_like(A)
-#     radius = torch.zeros(A.shape[:-1], device=A.device)
-    
-#     valid_indices = torch.arange(A.shape[0], device=A.device)
-    
-#     while valid_indices.numel() > 0:
-#         try:
-#             solution = torch.linalg.solve(left[valid_indices], right[valid_indices])
-#             circumcenter[valid_indices] = solution.squeeze(-1)
-#             radius[valid_indices] = torch.norm(A[valid_indices] - circumcenter[valid_indices], dim=-1)
-#             break
-#         except RuntimeError:
-#             # If solve fails, process one by one
-#             for i in valid_indices:
-#                 try:
-#                     sol = torch.linalg.solve(left[i], right[i])
-#                     circumcenter[i] = sol.squeeze()
-#                     radius[i] = torch.norm(A[i] - circumcenter[i], dim=-1)
-#                 except RuntimeError:
-#                     # If individual solve fails, leave as zeros
-#                     pass
-#             break
-    
-#     mask = torch.isfinite(radius) & (radius > 0) & (radius >= beta.unsqueeze(1))
-    
-#     return mask, radius, circumcenter
-
 def check_boundary(points, point_cloud, beta, batch_size=60):
     n = points.size(0)
     result_mask = torch.zeros((n,), dtype=torch.bool)
