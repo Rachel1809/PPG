@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 from models.dataset import Dataset, write_ply, search_nearest_point
-from models.fields import LevelSetUDFNetwork
+from models.fields import UDFNetwork
 import argparse
 from pyhocon import ConfigFactory
 import os
@@ -111,7 +111,7 @@ class Runner:
         self.writer = None
 
         # Networks
-        self.udf_network = LevelSetUDFNetwork(**self.conf['model.udf_network']).to(self.device)
+        self.udf_network = UDFNetwork(**self.conf['model.udf_network']).to(self.device)
         if self.conf.get_string('train.load_ckpt') != 'none':
             self.udf_network.load_state_dict(torch.load(self.conf.get_string('train.load_ckpt'), map_location=self.device)["udf_network_fine"])
 
@@ -131,6 +131,10 @@ class Runner:
         knn = self.knn
         alpha = self.vect_weight
         extra_pts = self.extra_points
+        
+        blue_color = (255,165,0)
+        orange_color = (255,165,0)
+        
         for _ in tqdm(range(self.iter_step, self.step2_maxiter)):
             self.update_learning_rate(self.iter_step)
 
@@ -204,28 +208,31 @@ class Runner:
                 scale = max(theta, theta * np.sqrt(num_point / 20000))
                 
                 print("POINT_MOVED: ", point_moved.size())
+
                 if self.iter_step % 5000 == 0:
                     p = max(p - 0.02, 0.01)
                     print("p: ", p)
-                    write_ply(point_moved, (255,165,0), "{}_new_moved.ply".format(self.iter_step // 5000 * 5000), mode="w")
+                    write_ply(point_moved, orange_color, 
+                              "{}_new_moved.ply".format(self.iter_step // 5000 * 5000), mode="w")
                     # write_ply(point_moved, (100,149,237), "{}_new_moved.ply".format(self.iter_step))
-                    write_ply(self.dataset.point_gt, (100,149,237), "{}_filling.ply".format(self.iter_step))
+                    write_ply(point_gt, blue_color, 
+                              "{}_filling.ply".format(self.iter_step))
                 else:
                     print(f"Step: {self.iter_step // 5000 * 5000}")
-                    write_ply(point_moved, (255,165,0), "{}_new_moved.ply".format(self.iter_step // 5000 * 5000), mode="a")
+                    write_ply(point_moved, orange_color, 
+                              "{}_new_moved.ply".format(self.iter_step // 5000 * 5000), mode="a")
                     
-                self.dataset.point_gt = torch.cat((self.dataset.point_gt, point_moved), dim=0)
-                
                 extra_sample = point_moved + scale * torch.normal(0.0, 1.0, size=point_moved.size())
-                self.dataset.sample = torch.cat((self.dataset.sample, extra_sample), dim = 0)
-                self.dataset.sample_points_num += extra_sample.size(0)
+                
+                self.dataset.update_point_gt(point_moved)
+                self.dataset.update_sample(extra_sample)
+                self.dataset.update_sample_num(extra_sample)
 
                 extra_sample = extra_sample.view(-1, point_moved.size(0)//60, 3)
                 for j in range(extra_sample.size(0)):
                     nearest_idx = search_nearest_point(extra_sample[j], point_moved)
-                    nearest_points = point_moved[nearest_idx]
-                    self.dataset.point = torch.cat((self.dataset.point, nearest_points.view(-1, 3)), dim = 0)
-
+                    nearest_points = point_moved[nearest_idx].view(-1, 3)
+                    self.dataset.update_point(nearest_points)
                     
             if self.iter_step % self.save_freq == 0:
                 self.save_checkpoint()

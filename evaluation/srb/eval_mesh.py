@@ -3,11 +3,10 @@ sys.path.append('/workspace/LevelSetUDF')
 
 import argparse
 import numpy as np
-import torch
 from mesh_evaluator import MeshEvaluator
 import trimesh
 from pyhocon import ConfigFactory
-from tools.logger import get_logger, get_root_logger, print_log
+from tools.logger import get_root_logger, print_log
 import os
 import time
 

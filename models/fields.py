@@ -1,10 +1,9 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import numpy as np
 from models.embedder import get_embedder
 
-class LevelSetUDFNetwork(nn.Module):
+class UDFNetwork(nn.Module):
     def __init__(self,
                  d_in,
                  d_out,
@@ -17,7 +16,7 @@ class LevelSetUDFNetwork(nn.Module):
                  geometric_init=True,
                  weight_norm=True,
                  inside_outside=False):
-        super(LevelSetUDFNetwork, self).__init__()
+        super(UDFNetwork, self).__init__()
 
         dims = [d_in] + [d_hidden for _ in range(n_layers)] + [d_out]
 

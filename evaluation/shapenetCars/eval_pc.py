@@ -1,7 +1,6 @@
 import argparse
 import sys
 import numpy as np
-import torch
 from mesh_evaluator import MeshEvaluator
 import trimesh
 import os

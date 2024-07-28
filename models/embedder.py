@@ -1,5 +1,4 @@
 import torch
-import torch.nn as nn
 
 
 # Positional encoding embedding. Code was taken from https://github.com/bmild/nerf.

@@ -1,11 +1,9 @@
 import argparse
 import numpy as np
-import torch
 from mesh_evaluator import MeshEvaluator
 import trimesh
 from pyhocon import ConfigFactory
 import os
-from trimesh.base import Trimesh
 
 gt_cache={}
 

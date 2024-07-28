@@ -386,6 +386,18 @@ class Dataset:
         
         print('NP Load data: End')
 
+    def update_point_gt(self, point_new):
+        self.point_gt = torch.cat((self.point_gt, point_new), dim=0)
+        
+    def update_point(self, point_new):
+        self.point = torch.cat((self.point, point_new), dim=0)
+
+    def update_sample(self, point_new):
+        self.sample = torch.cat((self.sample, point_new), dim=0)
+        
+    def update_sample_num(self, point_new):
+        self.sample_points_num += point_new.size(0)
+
     def get_train_data(self, batch_size):
         index_coarse = np.random.choice(10, 1)
         index_fine = np.random.choice(self.sample_points_num//10, batch_size, replace = False)

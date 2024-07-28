@@ -1,10 +1,6 @@
 import numpy as  np
 import mcubes
 import trimesh
-import torch
-import sys
-from extensions.chamfer_dist import ChamferDistanceL2
-from tools.logger import print_log
 
 def as_mesh(scene_or_mesh):
     """
