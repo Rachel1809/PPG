@@ -232,7 +232,6 @@ def write_ply(points, color, filename, mode="w"):
             for point in points:
                 f.write("{} {} {} {} {} {}\n".format(point[0], point[1], point[2], color[0], color[1], color[2]))
     elif mode == "a":
-        print(color)
         with open(filename, mode) as f:
             for point in points:
                 f.write("{} {} {} {} {} {}\n".format(point[0], point[1], point[2], color[0], color[1], color[2]))
