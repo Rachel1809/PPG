@@ -211,7 +211,7 @@ class Runner:
                     write_ply(self.dataset.point_gt_raw, (65,105,225), "{}_filling.ply".format(self.iter_step))
                 
                 write_ply(point_moved, (255, 165, 0), "{}_filling.ply".format(self.iter_step // 5000 * 5000), mode="a")
-                
+                self.dataset.point_gt_raw = torch.cat((self.dataset.point_gt_raw, point_moved), dim=0)
                 self.dataset.point_gt = torch.cat((self.dataset.point_gt, point_moved), dim=0)
                 
                 extra_sample = point_moved + scale * torch.normal(0.0, 1.0, size=point_moved.size())
