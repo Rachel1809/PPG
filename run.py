@@ -207,11 +207,13 @@ class Runner:
                 if self.iter_step % 5000 == 0:
                     p = max(p - 0.02, 0.01)
                     print("p: ", p)
+                    write_ply(point_moved, (255,165,0), "{}_new_moved.ply".format(self.iter_step // 5000 * 5000), mode="w")
                     # write_ply(point_moved, (100,149,237), "{}_new_moved.ply".format(self.iter_step))
-                    write_ply(self.dataset.point_gt_raw, (100,149,237), "{}_filling.ply".format(self.iter_step))
-                print(f"Step: {self.iter_step // 5000 * 5000}")
-                write_ply(point_moved, (255,165,0), "{}_new_moved.ply".format(self.iter_step // 5000 * 5000), mode="a")
-                self.dataset.point_gt_raw = torch.cat((self.dataset.point_gt_raw, point_moved), dim=0)
+                    write_ply(self.dataset.point_gt, (100,149,237), "{}_filling.ply".format(self.iter_step))
+                else:
+                    print(f"Step: {self.iter_step // 5000 * 5000}")
+                    write_ply(point_moved, (255,165,0), "{}_new_moved.ply".format(self.iter_step // 5000 * 5000), mode="a")
+                    
                 self.dataset.point_gt = torch.cat((self.dataset.point_gt, point_moved), dim=0)
                 
                 extra_sample = point_moved + scale * torch.normal(0.0, 1.0, size=point_moved.size())
