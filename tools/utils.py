@@ -6,7 +6,6 @@ from tkinter import Variable
 from shutil import copyfile
 import numpy as np
 import trimesh
-
 from scipy.spatial import cKDTree
 
 
