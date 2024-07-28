@@ -5,94 +5,94 @@ from scipy.spatial import cKDTree
 import trimesh
 import faiss
 
-# def can_form_circle(points, beta):
-#     A, B, C = points[:, :, 0, :], points[:, :, 1, :], points[:, :, 2, :]
-
-#     v_AB = B - A
-#     v_AC = C - A
-
-#     norm_A = torch.sum(torch.square(A), dim=-1)
-#     norm_B = torch.sum(torch.square(B), dim=-1)
-#     norm_C = torch.sum(torch.square(C), dim=-1)
-
-#     v_normal = torch.cross(v_AB, v_AC)
-
-#     i1 = torch.divide(norm_B - norm_A, 2)
-#     i2 = torch.divide(norm_C - norm_A, 2)
-#     i3 = (v_normal @ A[:, 0].unsqueeze(-1)).squeeze()
-
-#     right = torch.cat((i1.unsqueeze(-1), i2.unsqueeze(-1), i3.unsqueeze(-1)), dim=-1).unsqueeze(-1)
-#     left = torch.cat((v_AB.unsqueeze(2), v_AC.unsqueeze(2), v_normal.unsqueeze(2)), dim=2)
-    
-#     try:
-#         circumcenter = torch.linalg.solve(left, right).squeeze()
-#         radius = torch.norm(A - circumcenter, dim=-1)
-#     except:
-#         circumcenter = torch.tensor([]).cuda()
-#         radius = torch.tensor([]).cuda()
-
-#         for i in range(A.size(0)):
-#             try:
-#               circum = torch.linalg.solve(left[i], right[i]).squeeze()
-#               radi = torch.norm(A[i] - circum, dim=-1)
-#             except:
-#               circum = torch.zeros((A.size(1), 3))
-#               radi = torch.zeros(A.size(1))
-            
-#             circumcenter = torch.cat((circumcenter, circum.unsqueeze(0).cuda()))
-#             radius = torch.cat((radius, radi.unsqueeze(0).cuda()))
-
-#     mask = torch.isfinite(radius) & (radius > 0)
-#     condition = radius >= beta.unsqueeze(1)
-#     mask = mask & condition
-
-#     return mask, radius, circumcenter
-
 def can_form_circle(points, beta):
-    A, B, C = points[:, :, 0], points[:, :, 1], points[:, :, 2]
-    
+    A, B, C = points[:, :, 0, :], points[:, :, 1, :], points[:, :, 2, :]
+
     v_AB = B - A
     v_AC = C - A
-    
-    norm_A = torch.sum(A**2, dim=-1)
-    norm_B = torch.sum(B**2, dim=-1)
-    norm_C = torch.sum(C**2, dim=-1)
-    
+
+    norm_A = torch.sum(torch.square(A), dim=-1)
+    norm_B = torch.sum(torch.square(B), dim=-1)
+    norm_C = torch.sum(torch.square(C), dim=-1)
+
     v_normal = torch.cross(v_AB, v_AC)
+
+    i1 = torch.divide(norm_B - norm_A, 2)
+    i2 = torch.divide(norm_C - norm_A, 2)
+    i3 = (v_normal @ A[:, 0].unsqueeze(-1)).squeeze()
+
+    right = torch.cat((i1.unsqueeze(-1), i2.unsqueeze(-1), i3.unsqueeze(-1)), dim=-1).unsqueeze(-1)
+    left = torch.cat((v_AB.unsqueeze(2), v_AC.unsqueeze(2), v_normal.unsqueeze(2)), dim=2)
     
-    i1 = (norm_B - norm_A) / 2
-    i2 = (norm_C - norm_A) / 2
-    i3 = torch.sum(v_normal * A, dim=-1)
-    
-    right = torch.stack((i1, i2, i3), dim=-1).unsqueeze(-1)
-    left = torch.stack((v_AB, v_AC, v_normal), dim=-2)
-    
-    circumcenter = torch.zeros_like(A)
-    radius = torch.zeros(A.shape[:-1], device=A.device)
-    
-    valid_indices = torch.arange(A.shape[0], device=A.device)
-    
-    while valid_indices.numel() > 0:
-        try:
-            solution = torch.linalg.solve(left[valid_indices], right[valid_indices])
-            circumcenter[valid_indices] = solution.squeeze(-1)
-            radius[valid_indices] = torch.norm(A[valid_indices] - circumcenter[valid_indices], dim=-1)
-            break
-        except RuntimeError:
-            # If solve fails, process one by one
-            for i in valid_indices:
-                try:
-                    sol = torch.linalg.solve(left[i], right[i])
-                    circumcenter[i] = sol.squeeze()
-                    radius[i] = torch.norm(A[i] - circumcenter[i], dim=-1)
-                except RuntimeError:
-                    # If individual solve fails, leave as zeros
-                    pass
-            break
-    
-    mask = torch.isfinite(radius) & (radius > 0) & (radius >= beta.unsqueeze(1))
-    
+    try:
+        circumcenter = torch.linalg.solve(left, right).squeeze()
+        radius = torch.norm(A - circumcenter, dim=-1)
+    except:
+        circumcenter = torch.tensor([]).cuda()
+        radius = torch.tensor([]).cuda()
+
+        for i in range(A.size(0)):
+            try:
+              circum = torch.linalg.solve(left[i], right[i]).squeeze()
+              radi = torch.norm(A[i] - circum, dim=-1)
+            except:
+              circum = torch.zeros((A.size(1), 3))
+              radi = torch.zeros(A.size(1))
+            
+            circumcenter = torch.cat((circumcenter, circum.unsqueeze(0).cuda()))
+            radius = torch.cat((radius, radi.unsqueeze(0).cuda()))
+
+    mask = torch.isfinite(radius) & (radius > 0)
+    condition = radius >= beta.unsqueeze(1)
+    mask = mask & condition
+
     return mask, radius, circumcenter
+
+# def can_form_circle(points, beta):
+#     A, B, C = points[:, :, 0], points[:, :, 1], points[:, :, 2]
+    
+#     v_AB = B - A
+#     v_AC = C - A
+    
+#     norm_A = torch.sum(A**2, dim=-1)
+#     norm_B = torch.sum(B**2, dim=-1)
+#     norm_C = torch.sum(C**2, dim=-1)
+    
+#     v_normal = torch.cross(v_AB, v_AC)
+    
+#     i1 = (norm_B - norm_A) / 2
+#     i2 = (norm_C - norm_A) / 2
+#     i3 = torch.sum(v_normal * A, dim=-1)
+    
+#     right = torch.stack((i1, i2, i3), dim=-1).unsqueeze(-1)
+#     left = torch.stack((v_AB, v_AC, v_normal), dim=-2)
+    
+#     circumcenter = torch.zeros_like(A)
+#     radius = torch.zeros(A.shape[:-1], device=A.device)
+    
+#     valid_indices = torch.arange(A.shape[0], device=A.device)
+    
+#     while valid_indices.numel() > 0:
+#         try:
+#             solution = torch.linalg.solve(left[valid_indices], right[valid_indices])
+#             circumcenter[valid_indices] = solution.squeeze(-1)
+#             radius[valid_indices] = torch.norm(A[valid_indices] - circumcenter[valid_indices], dim=-1)
+#             break
+#         except RuntimeError:
+#             # If solve fails, process one by one
+#             for i in valid_indices:
+#                 try:
+#                     sol = torch.linalg.solve(left[i], right[i])
+#                     circumcenter[i] = sol.squeeze()
+#                     radius[i] = torch.norm(A[i] - circumcenter[i], dim=-1)
+#                 except RuntimeError:
+#                     # If individual solve fails, leave as zeros
+#                     pass
+#             break
+    
+#     mask = torch.isfinite(radius) & (radius > 0) & (radius >= beta.unsqueeze(1))
+    
+#     return mask, radius, circumcenter
 
 def check_boundary(points, point_cloud, beta, batch_size=60):
     n = points.size(0)
