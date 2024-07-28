@@ -1,55 +1,97 @@
 import torch
-import torch.nn.functional as F
 import numpy as np
 import os
-import time
 from scipy.spatial import cKDTree
-from torch.utils.data import DataLoader, TensorDataset
-from extensions.chamfer_dist import ChamferDistanceL1
 import trimesh
 import faiss
 
-def can_form_circle(points, beta):
-    A, B, C = points[:, :, 0, :], points[:, :, 1, :], points[:, :, 2, :]
+# def can_form_circle(points, beta):
+#     A, B, C = points[:, :, 0, :], points[:, :, 1, :], points[:, :, 2, :]
 
+#     v_AB = B - A
+#     v_AC = C - A
+
+#     norm_A = torch.sum(torch.square(A), dim=-1)
+#     norm_B = torch.sum(torch.square(B), dim=-1)
+#     norm_C = torch.sum(torch.square(C), dim=-1)
+
+#     v_normal = torch.cross(v_AB, v_AC)
+
+#     i1 = torch.divide(norm_B - norm_A, 2)
+#     i2 = torch.divide(norm_C - norm_A, 2)
+#     i3 = (v_normal @ A[:, 0].unsqueeze(-1)).squeeze()
+
+#     right = torch.cat((i1.unsqueeze(-1), i2.unsqueeze(-1), i3.unsqueeze(-1)), dim=-1).unsqueeze(-1)
+#     left = torch.cat((v_AB.unsqueeze(2), v_AC.unsqueeze(2), v_normal.unsqueeze(2)), dim=2)
+    
+#     try:
+#         circumcenter = torch.linalg.solve(left, right).squeeze()
+#         radius = torch.norm(A - circumcenter, dim=-1)
+#     except:
+#         circumcenter = torch.tensor([]).cuda()
+#         radius = torch.tensor([]).cuda()
+
+#         for i in range(A.size(0)):
+#             try:
+#               circum = torch.linalg.solve(left[i], right[i]).squeeze()
+#               radi = torch.norm(A[i] - circum, dim=-1)
+#             except:
+#               circum = torch.zeros((A.size(1), 3))
+#               radi = torch.zeros(A.size(1))
+            
+#             circumcenter = torch.cat((circumcenter, circum.unsqueeze(0).cuda()))
+#             radius = torch.cat((radius, radi.unsqueeze(0).cuda()))
+
+#     mask = torch.isfinite(radius) & (radius > 0)
+#     condition = radius >= beta.unsqueeze(1)
+#     mask = mask & condition
+
+#     return mask, radius, circumcenter
+
+def can_form_circle(points, beta):
+    A, B, C = points[:, :, 0], points[:, :, 1], points[:, :, 2]
+    
     v_AB = B - A
     v_AC = C - A
-
-    norm_A = torch.sum(torch.square(A), dim=-1)
-    norm_B = torch.sum(torch.square(B), dim=-1)
-    norm_C = torch.sum(torch.square(C), dim=-1)
-
-    v_normal = torch.cross(v_AB, v_AC)
-
-    i1 = torch.divide(norm_B - norm_A, 2)
-    i2 = torch.divide(norm_C - norm_A, 2)
-    i3 = (v_normal @ A[:, 0].unsqueeze(-1)).squeeze()
-
-    right = torch.cat((i1.unsqueeze(-1), i2.unsqueeze(-1), i3.unsqueeze(-1)), dim=-1).unsqueeze(-1)
-    left = torch.cat((v_AB.unsqueeze(2), v_AC.unsqueeze(2), v_normal.unsqueeze(2)), dim=2)
     
-    try:
-        circumcenter = torch.linalg.solve(left, right).squeeze()
-        radius = torch.norm(A - circumcenter, dim=-1)
-    except:
-        circumcenter = torch.tensor([]).cuda()
-        radius = torch.tensor([]).cuda()
-
-        for i in range(A.size(0)):
-            try:
-              circum = torch.linalg.solve(left[i], right[i]).squeeze()
-              radi = torch.norm(A[i] - circum, dim=-1)
-            except:
-              circum = torch.zeros((A.size(1), 3))
-              radi = torch.zeros(A.size(1))
-            
-            circumcenter = torch.cat((circumcenter, circum.unsqueeze(0).cuda()))
-            radius = torch.cat((radius, radi.unsqueeze(0).cuda()))
-
-    mask = torch.isfinite(radius) & (radius > 0)
-    condition = radius >= beta.unsqueeze(1)
-    mask = mask & condition
-
+    norm_A = torch.sum(A**2, dim=-1)
+    norm_B = torch.sum(B**2, dim=-1)
+    norm_C = torch.sum(C**2, dim=-1)
+    
+    v_normal = torch.cross(v_AB, v_AC)
+    
+    i1 = (norm_B - norm_A) / 2
+    i2 = (norm_C - norm_A) / 2
+    i3 = torch.sum(v_normal * A, dim=-1)
+    
+    right = torch.stack((i1, i2, i3), dim=-1).unsqueeze(-1)
+    left = torch.stack((v_AB, v_AC, v_normal), dim=-2)
+    
+    circumcenter = torch.zeros_like(A)
+    radius = torch.zeros(A.shape[:-1], device=A.device)
+    
+    valid_indices = torch.arange(A.shape[0], device=A.device)
+    
+    while valid_indices.numel() > 0:
+        try:
+            solution = torch.linalg.solve(left[valid_indices], right[valid_indices])
+            circumcenter[valid_indices] = solution.squeeze(-1)
+            radius[valid_indices] = torch.norm(A[valid_indices] - circumcenter[valid_indices], dim=-1)
+            break
+        except RuntimeError:
+            # If solve fails, process one by one
+            for i in valid_indices:
+                try:
+                    sol = torch.linalg.solve(left[i], right[i])
+                    circumcenter[i] = sol.squeeze()
+                    radius[i] = torch.norm(A[i] - circumcenter[i], dim=-1)
+                except RuntimeError:
+                    # If individual solve fails, leave as zeros
+                    pass
+            break
+    
+    mask = torch.isfinite(radius) & (radius > 0) & (radius >= beta.unsqueeze(1))
+    
     return mask, radius, circumcenter
 
 def check_boundary(points, point_cloud, beta, batch_size=60):
@@ -113,8 +155,6 @@ def calculate_direction_vector(cloud, k=8):
     _, eigvecs = torch.linalg.eigh(covariances.cpu())
     normals = eigvecs[:, :, 0].cuda()
 
-    print("Normals size: ", normals.size())
-
     plane_normal = torch.cross(normals.unsqueeze(1).repeat(1, k, 1), neighbor_vectors, dim=2)
 
     perpendicular_vectors = torch.mean(plane_normal, dim=1)
@@ -173,22 +213,8 @@ def search_nearest_point(point_batch, point_gt):
     torch.cuda.empty_cache()
     return dis_idx
 
-# def write_ply(points, filename):
-#     with open(filename, 'w') as f:
-#         # Write the header
-#         f.write("ply\n")
-#         f.write("format ascii 1.0\n")
-#         f.write("element vertex {}\n".format(len(points)))
-#         f.write("property float x\n")
-#         f.write("property float y\n")
-#         f.write("property float z\n")
-#         f.write("end_header\n")
-
-#         # Write the points
-#         for point in points:
-#             f.write("{} {} {}\n".format(point[0], point[1], point[2]))
-def write_ply(points, color, filename):
-    with open(filename, 'w') as f:
+def write_ply(points, color, filename, mode="w"):
+    with open(filename, mode) as f:
         # Write the header
         f.write("ply\n")
         f.write("format ascii 1.0\n")
@@ -242,13 +268,13 @@ def process_data(data_dir, dataname):
     POINT_NUM_GT = pointcloud.shape[0] // 60 * 60
     QUERY_EACH = 1000000//POINT_NUM_GT
     
-    print(f"Point num: {POINT_NUM} | Point num GT: {POINT_NUM_GT} | Query each: {QUERY_EACH}")
+    # print(f"Point num: {POINT_NUM} | Point num GT: {POINT_NUM_GT} | Query each: {QUERY_EACH}")
 
     point_idx = np.random.choice(pointcloud.shape[0], POINT_NUM_GT, replace = False)
     pointcloud = pointcloud[point_idx,:]
     ptree = cKDTree(pointcloud)
+    
     sigmas = []
-
     normal = []
     
     for p in np.array_split(pointcloud,100,axis=0):
@@ -286,15 +312,10 @@ def process_data(data_dir, dataname):
             neighbor_points = neighbor_points.reshape(-1, k, 3)
             neighbor_vectors = neighbor_points - tt[j][:, np.newaxis, :]
             covariances = np.matmul(neighbor_vectors.transpose(0, 2, 1), neighbor_vectors)
-            eigvals, eigvecs = np.linalg.eigh(covariances)
+            _, eigvecs = np.linalg.eigh(covariances)
             normal_vectors = eigvecs[:, :, 0]
             
-            normal_vectors = normal_vectors / (np.linalg.norm(normal_vectors, axis=1))[:, np.newaxis]
-            
-            # nn = pointcloud[d[1]]
-            # normal_vectors = calculate_normal_vectors(nn)
-            # normal_vectors = np.asarray(normal_vectors).reshape(-1,3)
-            
+            normal_vectors = normal_vectors / (np.linalg.norm(normal_vectors, axis=1))[:, np.newaxis]            
             normal_tmp.append(normal_vectors)
             
             nearest_idx = search_nearest_point(torch.tensor(tt[j]).float().cuda(), torch.tensor(pointcloud).float().cuda())
@@ -315,8 +336,6 @@ def process_data(data_dir, dataname):
     sample = np.asarray(sample)
     sample_near = np.asarray(sample_near)
     normal = np.asarray(normal)
-    
-    print(f"Sample shape: {sample.shape} | Sample_near shape: {sample_near.shape} | Normal shape: {normal.shape}")
 
     # save sample_near and sample points to query_data directory with .npz format
     os.makedirs(os.path.join(data_dir, 'query_data'), exist_ok=True)
@@ -347,41 +366,33 @@ class Dataset:
         self.sample = np.asarray(load_data['sample']).reshape(-1,3)
         self.point_gt = np.asarray(load_data['point']).reshape(-1,3)
         self.point_gt_raw = np.asarray(load_data['point']).reshape(-1,3)
-        
-        # self.normal = np.asarray(load_data['normal']).reshape(-1,3)
-        
+    
         # sample_points_num = QUERY_EACH - 1
         self.sample_points_num = self.sample.shape[0]-1
 
         self.object_bbox_min = np.array([np.min(self.point[:,0]), np.min(self.point[:,1]), np.min(self.point[:,2])]) -0.05
         self.object_bbox_max = np.array([np.max(self.point[:,0]), np.max(self.point[:,1]), np.max(self.point[:,2])]) +0.05
-        # border
-        print('border:',self.object_bbox_min,self.object_bbox_max)
 
         self.point = torch.from_numpy(self.point).to(self.device).float()
         self.sample = torch.from_numpy(self.sample).to(self.device).float()
         self.point_gt_raw = torch.from_numpy(self.point_gt_raw).to(self.device).float()
         
         self.point_gt = torch.from_numpy(self.point_gt).to(self.device).float()
-        # self.normal = torch.from_numpy(self.normal).to(self.device).float()
-    
+        
         print('NP Load data: End')
 
-    # def get_train_data(self, batch_size, samples_dist):
     def get_train_data(self, batch_size):
         index_coarse = np.random.choice(10, 1)
         index_fine = np.random.choice(self.sample_points_num//10, batch_size, replace = False)
         index = index_fine * 10 + index_coarse
-        # self.is_optimized = True
 
         points = self.point[index]
         sample = self.sample[index]
-        # normals = self.normal[index]
         return points, sample, self.point_gt
     
     def gen_extra_points(self, iter_step, p=0.1, knn=8, alpha=3, extra_points = 240):
         num_point = self.point_gt.size(0) // 60 * 60
-        print(p, knn, alpha, extra_points)
+        # print(p, knn, alpha, extra_points)
         selected_gt, dir_vec = calculate_direction_vector(self.point_gt[:num_point], knn)
         
         dir_norm = torch.norm(dir_vec, dim=1)
@@ -393,24 +404,9 @@ class Dataset:
         if iter_step % 1000 == 0:
             write_ply(selected_gt[sorted_indices], (255, 255, 0), "{}_new_boundary.ply".format(iter_step))
 
-        tt1 = selected_gt + alpha * dir_vec
-        tt1 = tt1[sorted_indices]
+        generated_point = selected_gt + alpha * dir_vec
+        generated_point = generated_point[sorted_indices]
 
         torch.cuda.empty_cache()
 
-        return tt1.detach()
-
-    def gen_new_data(self, tree):
-        distance, index = tree.query(self.sample.detach().cpu().numpy(), 1)
-        self.point_new = tree.data[index]
-        self.point_new = torch.from_numpy(self.point_new).to(self.device).float()
-
-
-    def get_train_data_step2(self, batch_size):
-        index_coarse = np.random.choice(10, 1)
-        index_fine = np.random.choice(self.sample_points_num//10, batch_size, replace = False)
-        index = index_fine * 10 + index_coarse  # for accelerating random choice operation
-        points = self.point_new[index]
-        sample = self.sample[index]
-        return points, sample, self.point_gt
-    
+        return generated_point.detach()

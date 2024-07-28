@@ -94,5 +94,5 @@ Please also check out the following works that inspire us a lot:
 * [Baorui Ma et al. - Reconstructing Surfaces for Sparse Point Clouds with On-Surface Priors (CVPR2022)](https://mabaorui.github.io/-OnSurfacePrior_project_page/)
 * [Baorui Ma et al. - Learning a More Continuous Zero Level Set in Unsigned Distance Fields through Level Set Projection (ICCV2023)](https://github.com/junshengzhou/LevelSetUDF)
 
-## Citation
-If you find our code or paper useful, please consider citing
+<!-- ## Citation
+If you find our code or paper useful, please consider citing -->

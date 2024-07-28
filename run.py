@@ -11,13 +11,10 @@ from pyhocon import ConfigFactory
 import os
 from shutil import copyfile
 import numpy as np
-from tools.logger import get_logger, get_root_logger, print_log
+from tools.logger import get_root_logger
 from tools.utils import remove_far, remove_outlier
-from tools.surface_extraction import as_mesh, surface_extraction
+from tools.surface_extraction import surface_extraction
 from extensions.chamfer_dist import ChamferDistanceL1, ChamferDistanceL2
-import point_cloud_utils as pcu
-import open3d as o3d 
-from scipy.spatial import cKDTree
 import math
 import warnings
 warnings.filterwarnings('ignore')
@@ -134,10 +131,9 @@ class Runner:
         knn = self.knn
         alpha = self.vect_weight
         extra_pts = self.extra_points
-        for iter_i in tqdm(range(self.iter_step, self.step2_maxiter)):
+        for _ in tqdm(range(self.iter_step, self.step2_maxiter)):
             self.update_learning_rate(self.iter_step)
 
-            # index, points, samples, normals, point_gt = self.dataset.get_train_data(batch_size, samples_dist)
             points, samples, point_gt = self.dataset.get_train_data(batch_size)
 
             samples.requires_grad = True
@@ -164,7 +160,6 @@ class Runner:
             loss_surf = torch.mean(udf_surface) * self.surf_weight
             
 
-
             # #---------------------gradient-surface orthogonal loss ------------------
             #grad_gt_norm is the difference (distance) of samples and points (with normalization)
             # grad_gt_norm = F.normalize(samples - points, dim=1)
@@ -187,10 +182,6 @@ class Runner:
                 print("Loss: {0}, Loss CD: {1}".format(loss, loss_cd))
 
             if self.iter_step % self.report_freq == 0:
-            # if self.iter_step == self.step2_maxiter:
-            #     #print_log('iter:{:8>d} cd_l1 = {} consis = {} surf = {} query_grad = {} lr={}'.format(self.iter_step, loss_cd, loss_proj, loss_surf, loss_orth, self.optimizer.param_groups[0]['lr']), logger=logger)
-            #     #self.extract_mesh(resolution=args.mcube_resolution, threshold=0.0, point_gt=point_gt, iter_step=self.iter_step, logger=logger)
-                #write_ply(point_gt, (255, 0, 255), "{}_point_gt.ply".format(self.iter_step))
                 if self.iter_step == self.step2_maxiter:
                     res = 256
                 else:
@@ -199,7 +190,6 @@ class Runner:
                 self.extract_mesh(resolution=res, threshold=0.0, point_gt=point_gt, iter_step=self.iter_step, logger=logger)
                 
             
-            # if (self.iter_step % 1 == 0):
             if (self.iter_step >= self.step1_maxiter) and (self.iter_step < self.step2_maxiter) and (self.iter_step % 1000 == 0):
                 new_points = self.dataset.gen_extra_points(self.iter_step, p, knn, alpha, extra_pts) 
                 new_points.requires_grad = True
@@ -218,7 +208,9 @@ class Runner:
                     p = max(p - 0.02, 0.01)
                     print("p: ", p)
                     write_ply(point_moved, (0, 255, 0), "{}_new_moved.ply".format(self.iter_step))
-
+                    write_ply(self.dataset.point_gt, (65,105,225), "{}_filling.ply".format(self.iter_step))
+                    write_ply(point_moved, (255, 165, 0), "{}_filling.ply".format(self.iter_step), mode="a")
+                
                 self.dataset.point_gt = torch.cat((self.dataset.point_gt, point_moved), dim=0)
                 
                 extra_sample = point_moved + scale * torch.normal(0.0, 1.0, size=point_moved.size())
@@ -231,31 +223,16 @@ class Runner:
                     nearest_points = point_moved[nearest_idx]
                     self.dataset.point = torch.cat((self.dataset.point, nearest_points.view(-1, 3)), dim = 0)
 
-                #self.extract_mesh(resolution=args.mcube_resolution, threshold=0.0, point_gt=tmp_gt, iter_step=self.iter_step, file_name="_in_progress.ply", logger=logger)
-                
-                #write_ply(tmp_gt, out_dir+'/'+str(self.iter_step)+'_in_progress.ply')
-                
-                
                     
             if self.iter_step % self.save_freq == 0:
                 self.save_checkpoint()
             
-            # if self.iter_step == self.step1_maxiter:
-            #     _ = self.gen_extra_pointcloud(self.iter_step, 1, samples_dist)
-
             if self.iter_step % self.val_freq == 0:
                 grad_surf = self.udf_network.gradient(point_gt)
                 grad_surf_norm = F.normalize(grad_surf, dim=-1)
                 out_dir_norm = os.path.join(self.base_exp_dir, 'normal')
                 os.makedirs(out_dir_norm, exist_ok=True)
                 np.save(os.path.join(out_dir_norm, 'normal_%d.npy' % self.iter_step), grad_surf_norm.detach().cpu().numpy())
-
-            # if self.iter_step % self.val_freq == 0 and self.iter_step != self.step1_maxiter: 
-            #     self.extract_mesh(resolution=args.mcube_resolution, threshold=0.0, point_gt=point_gt, iter_step=self.iter_step, logger=logger)
-
-            # if self.iter_step == self.step1_maxiter: 
-            #     self.extract_mesh(resolution=args.mcube_resolution, threshold=0.0, point_gt=point_gt, iter_step=self.iter_step, logger=logger)
-
 
     def extract_mesh(self, resolution=64, threshold=0.0, point_gt=None, iter_step=0, file_name='_mesh_new_centroid_surf0-05_thres.ply', logger=None):
 

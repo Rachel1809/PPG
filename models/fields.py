@@ -21,7 +21,6 @@ class LevelSetUDFNetwork(nn.Module):
 
         dims = [d_in] + [d_hidden for _ in range(n_layers)] + [d_out]
 
-
         self.embed_fn_fine = None
 
         if multires > 0:

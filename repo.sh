@@ -21,7 +21,7 @@ git remote remove origin
 git init
 
 # Get the repository URL from command-line argument
-repo_url=git@github.com:Rachel1809/LevelSetUDF.git
+repo_url=git@github.com:Rachel1809/PPG.git
 
 if [[ -z $repo_url ]]; then
   echo "Usage: $0 <repository_url>"
